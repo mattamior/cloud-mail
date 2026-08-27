@@ -1,0 +1,70 @@
+{
+  "svif_adapter": {"version": "0.2"},
+  "adapter": {
+    "id": "cloudflare.workers.validation",
+    "version": "0.2.0",
+    "kinds": ["delivery", "provider", "observation"]
+  },
+  "operations": [
+    {
+      "name": "resolve_validation_resources",
+      "effect": "resolve",
+      "authority": "read",
+      "retry": "idempotent",
+      "failure_classes": ["ADAPTER_CONFIGURATION_INVALID", "EXTERNAL_ACCOUNT_STATE"]
+    },
+    {
+      "name": "deliver_verified_validation_candidate",
+      "effect": "actuate",
+      "authority": "protected-delivery",
+      "retry": "guarded",
+      "input_record_kinds": ["verification"],
+      "output_record_kinds": ["delivery"],
+      "failure_classes": ["AUTHORITY_REQUIRED", "CREDENTIAL_UNAVAILABLE", "PROVENANCE_MISMATCH", "DELIVERY_FAILURE", "EXTERNAL_ACCOUNT_STATE", "TRANSIENT_EXTERNAL_FAILURE"]
+    },
+    {
+      "name": "observe_validation_deployment",
+      "effect": "observe",
+      "authority": "read",
+      "retry": "idempotent",
+      "input_record_kinds": ["delivery"],
+      "output_record_kinds": ["observation"],
+      "failure_classes": ["OBSERVATION_FAILURE", "EXTERNAL_INTEGRATION_FAILURE", "TRANSIENT_EXTERNAL_FAILURE"]
+    },
+    {
+      "name": "recover_validation_delivery",
+      "effect": "recover",
+      "authority": "mutation",
+      "retry": "guarded",
+      "failure_classes": ["DELIVERY_FAILURE", "EXTERNAL_ACCOUNT_STATE", "TRANSIENT_EXTERNAL_FAILURE"]
+    }
+  ],
+  "credentials": [
+    {
+      "reference": "protected-store://github-actions-environment/svif-validation/CLOUDFLARE_API_TOKEN",
+      "purpose": "deploy the isolated Cloud Mail validation Worker and manage only its required validation resources",
+      "minimum_scope": "Workers Scripts Edit, Workers KV Storage Edit, and D1 Edit for the intended Cloudflare account",
+      "value_transport": "protected-store-only"
+    },
+    {
+      "reference": "protected-store://github-actions-environment/svif-validation/CLOUDFLARE_ACCOUNT_ID",
+      "purpose": "identify the intended Cloudflare account for isolated validation",
+      "minimum_scope": "target account identity",
+      "value_transport": "protected-store-only"
+    }
+  ],
+  "extensions": {
+    "provider": "cloudflare",
+    "runtime": "workers",
+    "candidate_identity": "git-full-sha",
+    "validation_branch": "svif/cloudflare-validation",
+    "automatic_delivery_gate": "github-actions-variable:SVIF_ENABLE_VALIDATION_DELIVERY=true",
+    "resource_isolation": {
+      "worker": "cloud-mail-svif-validation",
+      "d1": "cloud-mail-svif-validation",
+      "kv": "cloud-mail-svif-validation"
+    },
+    "resource_strategy": "discover-before-create and reuse by validation-specific name",
+    "observation": ["/api/health exact revision + D1/KV/assets", "/ frontend app shell"]
+  }
+}

@@ -1,0 +1,23 @@
+agnir:
+  version: "0.1"
+  discovery_profile: "repository-filesystem/0.1"
+
+project:
+  identity: "urn:svif:validation:cloud-mail-cloudflare"
+  profiles:
+    - generic
+
+memory:
+  state: ".agnir/state.md"
+  next_actions: ".agnir/next-actions.md"
+  decisions: ".agnir/decisions.md"
+  evidence: ".agnir/evidence/"
+
+policy:
+  checkpoint: event-driven
+
+extensions:
+  agnir/repository:
+    canonical: "mattamior/cloud-mail"
+    authoritative_ref: "svif/cloudflare-validation"
+    predecessor_ref: "zerolocal/cloudflare-validation"

@@ -1,0 +1,30 @@
+svif:
+  version: "0.2"
+  contract: "core/0.2"
+
+project:
+  identity: "urn:svif:validation:cloud-mail-cloudflare"
+
+continuity:
+  protocol: agnir
+  compatibility: "0.1"
+  discovery: "AGNIR.yaml"
+
+profiles:
+  - "software-delivery/0.2"
+
+extensions:
+  svif/repository:
+    canonical: "mattamior/cloud-mail"
+    authoritative_ref: "svif/cloudflare-validation"
+    predecessor_ref: "zerolocal/cloudflare-validation"
+  svif/validation:
+    role: "non-founding-validation"
+    provider: "cloudflare"
+    runtime: "workers"
+    adapter: "adapters/cloudflare-validation.json"
+    workflow: ".github/workflows/svif-validation.yml"
+    automatic_delivery_gate: "github-actions-variable:SVIF_ENABLE_VALIDATION_DELIVERY=true"
+    observation_paths:
+      - "/api/health"
+      - "/"

@@ -1,26 +1,36 @@
-name: ZeroLocal Validation
+name: Svif Validation
 
 on:
   pull_request:
     paths:
-      - "ZEROLOCAL.yaml"
-      - ".github/workflows/zerolocal-validation.yml"
+      - "AGNIR.yaml"
+      - "SVIF.yaml"
+      - ".agnir/**"
+      - "adapters/**"
+      - "validation/**"
+      - "conformance/**"
+      - ".github/workflows/svif-validation.yml"
       - "scripts/**"
       - "mail-worker/**"
       - "mail-vue/**"
   push:
     branches:
-      - zerolocal/cloudflare-validation
+      - svif/cloudflare-validation
     paths:
-      - "ZEROLOCAL.yaml"
-      - ".github/workflows/zerolocal-validation.yml"
+      - "AGNIR.yaml"
+      - "SVIF.yaml"
+      - ".agnir/**"
+      - "adapters/**"
+      - "validation/**"
+      - "conformance/**"
+      - ".github/workflows/svif-validation.yml"
       - "scripts/**"
       - "mail-worker/**"
       - "mail-vue/**"
   workflow_dispatch:
     inputs:
       revision:
-        description: Full immutable commit SHA to validate and deploy
+        description: Full immutable commit SHA to validate and optionally deliver
         required: true
         type: string
 
@@ -28,24 +38,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: zerolocal-validation
+  group: svif-validation
   cancel-in-progress: false
 
 env:
-  ZEROLOCAL_WORKER_NAME: cloud-mail-zerolocal-validation
-  ZEROLOCAL_D1_NAME: cloud-mail-zerolocal-validation
-  ZEROLOCAL_KV_NAME: cloud-mail-zerolocal-validation
+  SVIF_WORKER_NAME: cloud-mail-svif-validation
+  SVIF_D1_NAME: cloud-mail-svif-validation
+  SVIF_KV_NAME: cloud-mail-svif-validation
 
 jobs:
   validate:
-    name: Validate immutable revision
+    name: Verify immutable candidate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      sha: ${{ steps.revision.outputs.sha }}
+      sha: ${{ steps.candidate.outputs.sha }}
     steps:
-      - name: Resolve immutable revision
-        id: revision
+      - name: Resolve immutable candidate
+        id: candidate
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -64,10 +74,10 @@ jobs:
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout exact revision
-        uses: actions/checkout@v4
+      - name: Checkout exact candidate
+        uses: actions/checkout@v6
         with:
-          ref: ${{ steps.revision.outputs.sha }}
+          ref: ${{ steps.candidate.outputs.sha }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
@@ -75,13 +85,13 @@ jobs:
           version: 9
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: |
-            mail-worker/pnpm-lock.yaml
-            mail-vue/pnpm-lock.yaml
+          package-manager-cache: false
+
+      - name: Verify Svif and Agnir validation contracts
+        run: python conformance/check_svif_validation.py
 
       - name: Install Worker dependencies
         working-directory: mail-worker
@@ -97,31 +107,33 @@ jobs:
 
       - name: Render non-secret validation config
         env:
-          ZEROLOCAL_D1_ID: 00000000-0000-0000-0000-000000000000
-          ZEROLOCAL_KV_ID: 00000000000000000000000000000000
-          ZEROLOCAL_JWT_SECRET: zerolocal-validation-build-only
-          ZEROLOCAL_REVISION: ${{ steps.revision.outputs.sha }}
-        run: ./scripts/zerolocal-render-config.sh
+          SVIF_D1_ID: 00000000-0000-0000-0000-000000000000
+          SVIF_KV_ID: 00000000000000000000000000000000
+          SVIF_JWT_SECRET: svif-validation-build-only
+          SVIF_REVISION: ${{ steps.candidate.outputs.sha }}
+        run: ./scripts/svif-render-config.sh
 
       - name: Validate Worker bundle and bindings
         working-directory: mail-worker
-        run: pnpm wrangler deploy --dry-run -c wrangler-zerolocal.generated.toml
+        run: pnpm wrangler deploy --dry-run -c wrangler-svif.generated.toml
 
   deploy-validation:
-    name: Deploy isolated validation environment
+    name: Deliver isolated validation candidate
     needs: validate
     if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/zerolocal/cloudflare-validation') ||
+      (github.event_name == 'push' &&
+       github.ref == 'refs/heads/svif/cloudflare-validation' &&
+       vars.SVIF_ENABLE_VALIDATION_DELIVERY == 'true') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: zerolocal-validation
+    environment: svif-validation
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout exact validated revision
-        uses: actions/checkout@v4
+      - name: Checkout exact verified candidate
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.validate.outputs.sha }}
 
@@ -131,13 +143,10 @@ jobs:
           version: 9
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "22"
-          cache: pnpm
-          cache-dependency-path: |
-            mail-worker/pnpm-lock.yaml
-            mail-vue/pnpm-lock.yaml
+          package-manager-cache: false
 
       - name: Install Worker dependencies
         working-directory: mail-worker
@@ -156,7 +165,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
-            echo "::error::CLOUDFLARE_ACCOUNT_ID must be exactly 32 hexadecimal characters. Copy Account ID, not Zone ID or an account name."
+            echo "::error::CLOUDFLARE_ACCOUNT_ID must be exactly 32 hexadecimal characters."
             exit 1
           fi
 
@@ -170,11 +179,9 @@ jobs:
           if [ "$HTTP_STATUS" != "200" ] || ! jq -e --arg id "$CLOUDFLARE_ACCOUNT_ID" \
             '.success == true and .result.id == $id' "$RESPONSE" >/dev/null 2>&1; then
             ERROR_CODES="$(jq -r '[.errors[]?.code] | if length == 0 then "none" else map(tostring) | join(",") end' "$RESPONSE" 2>/dev/null || echo unreadable)"
-            echo "::error::Cloudflare account/token pairing failed (HTTP $HTTP_STATUS, API codes: $ERROR_CODES). Verify that CLOUDFLARE_ACCOUNT_ID is the Account ID from Workers & Pages and that CLOUDFLARE_API_TOKEN is scoped to that same account."
+            echo "::error::Cloudflare account/token pairing failed (HTTP $HTTP_STATUS, API codes: $ERROR_CODES)."
             exit 1
           fi
-
-          echo "Cloudflare account/token pairing verified."
 
       - name: Discover or provision isolated KV namespace
         id: kv
@@ -183,16 +190,13 @@ jobs:
         run: |
           set -euo pipefail
           KV_LIST="$(pnpm wrangler kv namespace list)"
-          KV_ID="$(printf '%s' "$KV_LIST" | jq -r --arg name "$ZEROLOCAL_KV_NAME" '.[] | select(.title == $name) | .id' | head -n1)"
+          KV_ID="$(printf '%s' "$KV_LIST" | jq -r --arg name "$SVIF_KV_NAME" '.[] | select(.title == $name) | .id' | head -n1)"
           if [ -z "$KV_ID" ]; then
-            pnpm wrangler kv namespace create "$ZEROLOCAL_KV_NAME"
+            pnpm wrangler kv namespace create "$SVIF_KV_NAME"
             KV_LIST="$(pnpm wrangler kv namespace list)"
-            KV_ID="$(printf '%s' "$KV_LIST" | jq -r --arg name "$ZEROLOCAL_KV_NAME" '.[] | select(.title == $name) | .id' | head -n1)"
+            KV_ID="$(printf '%s' "$KV_LIST" | jq -r --arg name "$SVIF_KV_NAME" '.[] | select(.title == $name) | .id' | head -n1)"
           fi
-          if [ -z "$KV_ID" ]; then
-            echo "Unable to resolve isolated KV namespace" >&2
-            exit 1
-          fi
+          test -n "$KV_ID"
           echo "id=$KV_ID" >> "$GITHUB_OUTPUT"
 
       - name: Discover or provision isolated D1 database
@@ -202,41 +206,38 @@ jobs:
         run: |
           set -euo pipefail
           DB_LIST="$(pnpm wrangler d1 list --json)"
-          D1_ID="$(printf '%s' "$DB_LIST" | jq -r --arg name "$ZEROLOCAL_D1_NAME" '.[] | select(.name == $name) | .uuid' | head -n1)"
+          D1_ID="$(printf '%s' "$DB_LIST" | jq -r --arg name "$SVIF_D1_NAME" '.[] | select(.name == $name) | .uuid' | head -n1)"
           if [ -z "$D1_ID" ]; then
-            pnpm wrangler d1 create "$ZEROLOCAL_D1_NAME"
+            pnpm wrangler d1 create "$SVIF_D1_NAME"
             DB_LIST="$(pnpm wrangler d1 list --json)"
-            D1_ID="$(printf '%s' "$DB_LIST" | jq -r --arg name "$ZEROLOCAL_D1_NAME" '.[] | select(.name == $name) | .uuid' | head -n1)"
+            D1_ID="$(printf '%s' "$DB_LIST" | jq -r --arg name "$SVIF_D1_NAME" '.[] | select(.name == $name) | .uuid' | head -n1)"
           fi
-          if [ -z "$D1_ID" ]; then
-            echo "Unable to resolve isolated D1 database" >&2
-            exit 1
-          fi
+          test -n "$D1_ID"
           echo "id=$D1_ID" >> "$GITHUB_OUTPUT"
 
       - name: Create ephemeral app secret and render deployment config
         id: runtime
         shell: bash
         env:
-          ZEROLOCAL_D1_ID: ${{ steps.d1.outputs.id }}
-          ZEROLOCAL_KV_ID: ${{ steps.kv.outputs.id }}
-          ZEROLOCAL_REVISION: ${{ needs.validate.outputs.sha }}
+          SVIF_D1_ID: ${{ steps.d1.outputs.id }}
+          SVIF_KV_ID: ${{ steps.kv.outputs.id }}
+          SVIF_REVISION: ${{ needs.validate.outputs.sha }}
         run: |
           set -euo pipefail
-          ZEROLOCAL_JWT_SECRET="$(openssl rand -hex 24)"
-          echo "::add-mask::$ZEROLOCAL_JWT_SECRET"
-          export ZEROLOCAL_JWT_SECRET
-          ./scripts/zerolocal-render-config.sh
-          echo "jwt_secret=$ZEROLOCAL_JWT_SECRET" >> "$GITHUB_OUTPUT"
+          SVIF_JWT_SECRET="$(openssl rand -hex 24)"
+          echo "::add-mask::$SVIF_JWT_SECRET"
+          export SVIF_JWT_SECRET
+          ./scripts/svif-render-config.sh
+          echo "jwt_secret=$SVIF_JWT_SECRET" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy exact validated revision
+      - name: Deploy exact verified candidate
         id: deploy
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: mail-worker
-          command: deploy -c wrangler-zerolocal.generated.toml
+          command: deploy -c wrangler-svif.generated.toml
 
       - name: Resolve deployment endpoint
         id: endpoint
@@ -246,10 +247,7 @@ jobs:
         run: |
           set -euo pipefail
           HOST="$(printf '%s' "$RAW_DEPLOYMENT_URL" | awk '{print $1}')"
-          if [ -z "$HOST" ]; then
-            echo "Cloudflare deploy did not expose a deployment URL" >&2
-            exit 1
-          fi
+          test -n "$HOST"
           case "$HOST" in
             http://*|https://*) URL="$HOST" ;;
             *) URL="https://$HOST" ;;
@@ -266,7 +264,7 @@ jobs:
           BODY="$(curl --fail --silent --show-error --retry 5 --retry-delay 2 "$URL/api/init/$JWT_SECRET")"
           test "$BODY" = "success"
 
-      - name: Verify backend and stateful bindings
+      - name: Observe backend and stateful bindings
         shell: bash
         env:
           URL: ${{ steps.endpoint.outputs.url }}
@@ -283,7 +281,7 @@ jobs:
           ' health.json >/dev/null
           cat health.json
 
-      - name: Verify frontend
+      - name: Observe frontend
         shell: bash
         env:
           URL: ${{ steps.endpoint.outputs.url }}
@@ -299,12 +297,12 @@ jobs:
           REVISION: ${{ needs.validate.outputs.sha }}
         run: |
           {
-            echo "### ZeroLocal Cloudflare validation"
+            echo "### Svif Cloudflare validation"
             echo "- Revision: \`$REVISION\`"
             echo "- Endpoint: $URL"
-            echo "- Worker: \`$ZEROLOCAL_WORKER_NAME\`"
-            echo "- D1: \`$ZEROLOCAL_D1_NAME\`"
-            echo "- KV: \`$ZEROLOCAL_KV_NAME\`"
+            echo "- Worker: \`$SVIF_WORKER_NAME\`"
+            echo "- D1: \`$SVIF_D1_NAME\`"
+            echo "- KV: \`$SVIF_KV_NAME\`"
             echo "- Backend: \`/api/health\` observed healthy"
             echo "- Frontend: \`/\` observed with Cloud Mail app shell"
           } >> "$GITHUB_STEP_SUMMARY"

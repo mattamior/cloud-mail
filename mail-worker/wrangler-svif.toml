@@ -1,18 +1,18 @@
-name = "${ZEROLOCAL_WORKER_NAME}"
+name = "${SVIF_WORKER_NAME}"
 main = "src/index.js"
-compatibility_date = "2026-08-27"
+compatibility_date = "2026-08-28"
 
 [observability]
 enabled = true
 
 [[d1_databases]]
 binding = "db"
-database_name = "${ZEROLOCAL_D1_NAME}"
-database_id = "${ZEROLOCAL_D1_ID}"
+database_name = "${SVIF_D1_NAME}"
+database_id = "${SVIF_D1_ID}"
 
 [[kv_namespaces]]
 binding = "kv"
-id = "${ZEROLOCAL_KV_ID}"
+id = "${SVIF_KV_ID}"
 
 [assets]
 binding = "assets"
@@ -25,10 +25,11 @@ ai_model = ""
 analysis_cache = false
 orm_log = false
 domain = ["validation.invalid"]
-admin = "zerolocal@validation.invalid"
-jwt_secret = "${ZEROLOCAL_JWT_SECRET}"
+admin = "svif@validation.invalid"
+jwt_secret = "${SVIF_JWT_SECRET}"
 project_link = "https://github.com/mattamior/cloud-mail"
-zerolocal_revision = "${ZEROLOCAL_REVISION}"
+# Application compatibility field retained by the predecessor validation health hook.
+zerolocal_revision = "${SVIF_REVISION}"
 
 [build]
 command = "pnpm --prefix ../mail-vue install --frozen-lockfile && pnpm --prefix ../mail-vue run build"
