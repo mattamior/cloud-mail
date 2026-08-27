@@ -226,7 +226,7 @@ def main() -> None:
     )
 
     worker = (ROOT / "mail-worker/src/index.js").read_text(encoding="utf-8")
-    require_text(worker, ["/api/health", "env.zerolocal_revision", "checks.d1", "checks.kv", "checks.assets"], "Cloud Mail health hook")
+    require_text(worker, ["/api/health", "env.zerolocal_revision", "checks.d1", "checks.kv", "assets: Boolean(env.assets)"], "Cloud Mail health hook")
 
     state = (ROOT / ".agnir/state.md").read_text(encoding="utf-8")
     require_text(
