@@ -151,6 +151,31 @@ jobs:
         working-directory: mail-vue
         run: pnpm run build
 
+      - name: Verify Cloudflare account/token pairing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$CLOUDFLARE_ACCOUNT_ID" =~ ^[0-9a-fA-F]{32}$ ]]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID must be exactly 32 hexadecimal characters. Copy Account ID, not Zone ID or an account name."
+            exit 1
+          fi
+
+          RESPONSE="$(mktemp)"
+          HTTP_STATUS="$(curl --silent --show-error \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            --output "$RESPONSE" \
+            --write-out '%{http_code}' \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID")"
+
+          if [ "$HTTP_STATUS" != "200" ] || ! jq -e --arg id "$CLOUDFLARE_ACCOUNT_ID" \
+            '.success == true and .result.id == $id' "$RESPONSE" >/dev/null 2>&1; then
+            ERROR_CODES="$(jq -r '[.errors[]?.code] | if length == 0 then "none" else map(tostring) | join(",") end' "$RESPONSE" 2>/dev/null || echo unreadable)"
+            echo "::error::Cloudflare account/token pairing failed (HTTP $HTTP_STATUS, API codes: $ERROR_CODES). Verify that CLOUDFLARE_ACCOUNT_ID is the Account ID from Workers & Pages and that CLOUDFLARE_API_TOKEN is scoped to that same account."
+            exit 1
+          fi
+
+          echo "Cloudflare account/token pairing verified."
+
       - name: Discover or provision isolated KV namespace
         id: kv
         working-directory: mail-worker
