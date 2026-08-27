@@ -29,3 +29,11 @@
 - No KV namespace, D1 database, Worker deployment, schema initialization, or external endpoint observation occurred in that failed deploy job.
 - ZeroLocal will not route around this boundary by reading API tokens from unprotected repository variables or by requesting token values in chat.
 - The minimum validation token permissions are account-scoped `Workers Scripts Edit`, `Workers KV Storage Edit`, and `D1 Edit` for the intended account.
+
+## 2026-08-27 — Protected credentials retry
+
+- After the protected Cloudflare secrets were added, retry deploy job `98449843043` received masked non-empty credential values and again built the frontend successfully.
+- The first Cloudflare request failed while listing KV namespaces with API code `7003` on `/client/v4/accounts/<masked>/storage/kv/namespaces`, so the configured Cloudflare account identifier is invalid for the request.
+- GitHub masked the `CLOUDFLARE_ACCOUNT_ID` environment variable name itself in the job log while leaving `CLOUDFLARE_API_TOKEN` visible as a variable name. Because GitHub masks secret values wherever they appear, this is strong evidence that the stored account-ID secret may contain the literal string `CLOUDFLARE_ACCOUNT_ID` rather than the actual Account ID.
+- No KV namespace, D1 database, Worker deployment, schema initialization, or endpoint observation occurred in retry attempt 2.
+- The next allowed action is to replace only the protected `CLOUDFLARE_ACCOUNT_ID` value with the actual Account ID for the intended Cloudflare account, without exposing it in chat, and rerun the failed deploy job.
