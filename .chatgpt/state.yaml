@@ -1,0 +1,37 @@
+project: Cloud Mail
+status: active
+phase: validation-deployment
+repository: mattamior/cloud-mail
+rpm_ref: zerolocal/cloudflare-validation
+provider: cloudflare
+runtime: workers
+protocol: zerolocal-v0.1
+summary: >-
+  Cloud Mail is being brought under ZeroLocal on an isolated validation ref. The existing
+  production deployment workflow remains untouched. Validation uses a separate Cloudflare
+  Worker plus dedicated D1 and KV resources, serves the existing Vue frontend as Worker
+  static assets, and exposes an observable backend health endpoint.
+requested_intent:
+  - initialize official ZeroLocal RPM state
+  - verify the existing frontend and Worker remotely
+  - create a non-destructive Cloudflare validation deployment
+  - prove D1 and KV bindings plus frontend/backend reachability
+validation:
+  workflow: .github/workflows/zerolocal-validation.yml
+  branch: zerolocal/cloudflare-validation
+  health_path: /api/health
+  frontend_path: /
+validation_resources:
+  worker: cloud-mail-zerolocal-validation
+  d1: cloud-mail-zerolocal-validation
+  kv: cloud-mail-zerolocal-validation
+implemented:
+  - ZeroLocal provider descriptor and RPM bootstrap files
+  - isolated validation Worker configuration without production route, cron, email, AI, or R2 side effects
+  - credential-free remote build/dry-run validation
+  - trusted exact-revision validation deploy job
+  - idempotent D1 and KV discovery/provisioning
+  - backend health endpoint checking D1, KV, assets binding, and deployed revision
+  - post-deploy database initialization plus frontend/backend observation
+blockers:
+  - Live validation deployment depends on protected CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID being available with sufficient scope.

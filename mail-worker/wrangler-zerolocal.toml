@@ -1,0 +1,34 @@
+name = "${ZEROLOCAL_WORKER_NAME}"
+main = "src/index.js"
+compatibility_date = "2026-08-27"
+
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "db"
+database_name = "${ZEROLOCAL_D1_NAME}"
+database_id = "${ZEROLOCAL_D1_ID}"
+
+[[kv_namespaces]]
+binding = "kv"
+id = "${ZEROLOCAL_KV_ID}"
+
+[assets]
+binding = "assets"
+directory = "./dist"
+not_found_handling = "single-page-application"
+run_worker_first = ["/api/*", "/health", "/static/*", "/attachments/*"]
+
+[vars]
+ai_model = ""
+analysis_cache = false
+orm_log = false
+domain = ["validation.invalid"]
+admin = "zerolocal@validation.invalid"
+jwt_secret = "${ZEROLOCAL_JWT_SECRET}"
+project_link = "https://github.com/mattamior/cloud-mail"
+zerolocal_revision = "${ZEROLOCAL_REVISION}"
+
+[build]
+command = "pnpm --prefix ../mail-vue install --frozen-lockfile && pnpm --prefix ../mail-vue run build"
