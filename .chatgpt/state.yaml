@@ -1,6 +1,6 @@
 project: Cloud Mail
 status: active
-phase: verified-awaiting-provider-authorization
+phase: blocked-invalid-cloudflare-account-id
 repository: mattamior/cloud-mail
 rpm_ref: zerolocal/cloudflare-validation
 provider: cloudflare
@@ -9,9 +9,9 @@ protocol: zerolocal-v0.1
 summary: >-
   Cloud Mail is under ZeroLocal on an isolated validation ref. The existing production
   deployment workflow remains untouched. Remote validation passed for the implementation
-  candidate, but the isolated Cloudflare deployment stopped at the protected credential
-  boundary before any KV, D1, Worker deployment, database initialization, or external
-  observation occurred.
+  candidate. After protected Cloudflare secrets were added, the trusted deploy job received
+  non-empty credentials but Cloudflare rejected the configured account identifier with API
+  error 7003 before KV discovery or any provider resource mutation occurred.
 requested_intent:
   - initialize official ZeroLocal RPM state
   - verify the existing frontend and Worker remotely
@@ -29,20 +29,25 @@ validation:
     - Vue frontend builds to mail-worker/dist
     - isolated Wrangler config renders without protected values
     - Wrangler dry-run validates the Worker bundle, static assets, and declared bindings
-  deployment_result: blocked_at_trust_boundary
-  failure_category: protected secret
+  deployment_result: blocked_at_provider_account_identity
+  latest_attempt: 2
+  latest_deploy_job: 98449843043
+  failure_category: invalid provider account identifier
   failure_step: Discover or provision isolated KV namespace
   failure_evidence: >-
-    The trusted deploy job received empty CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID
-    environment values. Wrangler exited before provider resource discovery or creation because
-    non-interactive use requires CLOUDFLARE_API_TOKEN.
+    The deploy job now receives masked non-empty Cloudflare secret values, but Wrangler's KV
+    namespace list request failed at /client/v4/accounts/<masked>/storage/kv/namespaces with
+    Cloudflare API code 7003: the account object identifier is invalid. GitHub also masked the
+    CLOUDFLARE_ACCOUNT_ID environment variable name itself in the log, strongly suggesting the
+    stored secret value may have been the literal string CLOUDFLARE_ACCOUNT_ID rather than the
+    actual Cloudflare Account ID.
   health_path: /api/health
   frontend_path: /
 validation_resources:
   worker: cloud-mail-zerolocal-validation
   d1: cloud-mail-zerolocal-validation
   kv: cloud-mail-zerolocal-validation
-  provider_mutation_status: none from workflow run 33050376135
+  provider_mutation_status: none from workflow run 33050376135 attempts 1-2
 implemented:
   - ZeroLocal provider descriptor and RPM bootstrap files
   - isolated validation Worker configuration without production route, cron, email, AI, or R2 side effects
@@ -54,17 +59,18 @@ implemented:
 trust_boundaries:
   - name: Cloudflare validation authorization
     action: >-
-      Store CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in GitHub Actions protected
-      secrets available to the zerolocal-validation environment/repository, then rerun the
-      failed workflow jobs for run 33050376135.
+      Replace the GitHub Actions protected CLOUDFLARE_ACCOUNT_ID secret available to the
+      zerolocal-validation environment with the actual Account ID copied from the intended
+      Cloudflare account, without moving the value through chat, then rerun the failed deploy job.
     minimum_token_scope: >-
       Target Cloudflare account only; Workers Scripts Edit, Workers KV Storage Edit, and D1 Edit.
     secret_values_in_chat: prohibited
 blockers:
-  - Live validation deployment and observation are blocked until the protected Cloudflare credentials are available to the trusted deploy job.
+  - Live validation deployment and observation are blocked until CLOUDFLARE_ACCOUNT_ID identifies the intended Cloudflare account.
 checkpoint:
   timestamp: 2026-08-27
-  reason: remote validation completed and provider trust boundary was reached
+  reason: protected credentials became available but provider account identity failed with Cloudflare API code 7003
   resumability: >-
-    RPM is durable on zerolocal/cloudflare-validation, but a fresh ChatGPT Project conversation
-    also needs a project bootstrap pointer naming the canonical repository and this RPM ref.
+    RPM is durable on zerolocal/cloudflare-validation. Continue with workflow run 33050376135,
+    immutable candidate b6182583b6282e97dd3204208b0a5d242f387d2b, and deploy job 98449843043
+    after the protected CLOUDFLARE_ACCOUNT_ID value is corrected.
