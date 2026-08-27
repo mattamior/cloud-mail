@@ -59,6 +59,19 @@ The predecessor ZeroLocal validation branch established useful implementation ev
 
 This predecessor result is migration evidence only. Svif validation must establish its own current verification/delivery/observation evidence.
 
-## Current status
+## Current implementation status
 
-The Svif validation branch is being initialized from the predecessor validation implementation while replacing platform-specific memory and predecessor protocol naming with Agnir/Svif-native contracts. Provider actuation remains disabled by default.
+- `svif/cloudflare-validation` was created from predecessor ref `zerolocal/cloudflare-validation`.
+- Migration commit `250e5173f3cb0258e865097f9f9cd632aabe95f0` replaced active `.chatgpt/`, `ZEROLOCAL.yaml`, predecessor workflow/script/config names with Agnir/Svif-native validation artifacts while leaving production `main` untouched.
+- Svif Validation workflow run `33098133983` executed against candidate `250e5173f3cb0258e865097f9f9cd632aabe95f0` and failed during the conformance step before dependency install/build/dry-run.
+- The failure was a checker defect, not an application defect: `conformance/check_svif_validation.py` required the literal source form `checks.assets`, while the existing health hook validly expresses the same contract as `assets: Boolean(env.assets)`.
+- Protected delivery in run `33098133983` was skipped, so no Cloudflare actuation or observation occurred.
+- Checker fix commit `dde68f0b2c55224ba5e36bc6d7c30671ff311b25` relaxes that implementation-form assumption while preserving the semantic health-hook requirement.
+- The checker fix is committed but has not yet produced a recorded successful Svif Validation run at this checkpoint. Static validation therefore remains **not yet proven**.
+- Provider actuation remains disabled by default; no live Svif delivery or observation has been claimed.
+
+## Checkpoint
+
+- Timestamp: `2026-08-28T02:06:00+08:00`
+- Reason: explicit user checkpoint after Validation Project #2 migration and first checker-failure diagnosis.
+- Resumability: resume from `svif/cloudflare-validation` at or after checker fix commit `dde68f0b2c55224ba5e36bc6d7c30671ff311b25`; first establish a successful credential-free static verification run, record its immutable candidate/run evidence, and keep provider actuation disabled unless separately authorized.
